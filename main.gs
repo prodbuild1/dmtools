@@ -2,6 +2,7 @@
 // Configuration
 // =====================================================================
 
+// IMPORTANT: REPLACE THIS WITH YOUR ACTUAL DEPLOYED GAS URL
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbziXMS_YZq8_YDMxrkBNbLWzA3CBEzQoQwlGXY2o2QixAsBSSb4HhuSN6okQZiuA31xmg/exec';
 
 // =====================================================================
@@ -10,11 +11,11 @@ const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbziXMS_YZq8_YDM
 
 let currentTool = null;
 let isToolOpen = false;
-let tools = []; // Will be loaded from backend
-let FRAMEWORK_STAGES = {}; // Will be loaded from backend
+let tools = [];
+let FRAMEWORK_STAGES = {};
 
 // =====================================================================
-// UTILITY FUNCTIONS
+// UTILITY FUNCTIONS - FIXED PASSWORD TOGGLE
 // =====================================================================
 
 function showMessage(message, type = 'info') {
@@ -31,17 +32,29 @@ function showMessage(message, type = 'info') {
 }
 
 function setupPasswordToggles() {
-    document.querySelectorAll('.toggle-password').forEach(toggle => {
-        toggle.addEventListener('click', function() {
-            const input = this.previousElementSibling;
-            if (input.type === 'password') {
-                input.type = 'text';
-                this.textContent = '👁️';
-            } else {
-                input.type = 'password';
-                this.textContent = '👁️‍🗨️';
-            }
-        });
+    console.log('Setting up password toggles...');
+    
+    document.querySelectorAll('.password-toggle-container').forEach(container => {
+        const input = container.querySelector('input[type="password"], input[type="text"]');
+        const toggle = container.querySelector('.toggle-password');
+        
+        if (input && toggle) {
+            // Set initial state
+            toggle.textContent = input.type === 'password' ? '👁️‍🗨️' : '👁️';
+            
+            // Add click handler
+            toggle.addEventListener('click', function() {
+                console.log('Toggle clicked, current type:', input.type);
+                if (input.type === 'password') {
+                    input.type = 'text';
+                    this.textContent = '👁️';
+                } else {
+                    input.type = 'password';
+                    this.textContent = '👁️‍🗨️';
+                }
+                console.log('New type:', input.type);
+            });
+        }
     });
 }
 
@@ -51,6 +64,7 @@ function setupPasswordToggles() {
 
 async function loadToolsFromBackend() {
     try {
+        console.log('Loading tools from backend...');
         const formData = new FormData();
         formData.append('action', 'getTools');
         
@@ -59,15 +73,20 @@ async function loadToolsFromBackend() {
             body: formData
         });
         
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const data = await response.json();
+        console.log('Backend response:', data);
         
         if (data.success) {
             tools = data.tools || [];
             FRAMEWORK_STAGES = data.frameworkStages || {};
             
-            // IMPORTANT: Remove URLs from frontend tools to prevent exposure
+            // Remove URLs from frontend to prevent exposure
             tools = tools.map(tool => ({
                 id: tool.id,
                 name: tool.name,
@@ -79,14 +98,18 @@ async function loadToolsFromBackend() {
                 // URL is NOT stored in frontend
             }));
             
-            console.log('Tools metadata loaded from backend (URLs secured)');
+            console.log('Tools metadata loaded from backend');
+            console.log('Tools count:', tools.length);
+            console.log('Framework stages:', FRAMEWORK_STAGES);
             return true;
         } else {
-            console.error('Failed to load tools from backend:', data.message);
+            console.error('Backend returned error:', data.message);
+            showMessage('Failed to load tools: ' + data.message, 'error');
             return false;
         }
     } catch (error) {
         console.error('Error loading tools from backend:', error);
+        showMessage('Connection error. Please check your network and refresh.', 'error');
         return false;
     }
 }
@@ -116,6 +139,7 @@ function getUserStatus(user) {
 
 async function login(email, password) {
     try {
+        showMessage('Logging in...', 'info');
         const formData = new FormData();
         formData.append('action', 'login');
         formData.append('email', email);
@@ -127,6 +151,7 @@ async function login(email, password) {
         });
         
         const data = await response.json();
+        console.log('Login response:', data);
         
         if (data.success) {
             const today = new Date();
@@ -157,18 +182,19 @@ async function login(email, password) {
             
             return true;
         } else {
-            showMessage(data.message || 'Login failed', 'error');
+            showMessage(data.message || 'Login failed. Check your credentials.', 'error');
             return false;
         }
     } catch (error) {
-        showMessage('Connection error. Please try again.', 'error');
         console.error('Login error:', error);
+        showMessage('Connection error. Please try again.', 'error');
         return false;
     }
 }
 
 async function signup(name, email, password, phone = '') {
     try {
+        showMessage('Creating account...', 'info');
         const formData = new FormData();
         formData.append('action', 'signup');
         formData.append('name', name);
@@ -182,6 +208,7 @@ async function signup(name, email, password, phone = '') {
         });
         
         const data = await response.json();
+        console.log('Signup response:', data);
         
         if (data.success) {
             const userData = {
@@ -206,18 +233,19 @@ async function signup(name, email, password, phone = '') {
             
             return true;
         } else {
-            showMessage(data.message || 'Signup failed', 'error');
+            showMessage(data.message || 'Signup failed. Please try again.', 'error');
             return false;
         }
     } catch (error) {
-        showMessage('Connection error. Please try again.', 'error');
         console.error('Signup error:', error);
+        showMessage('Connection error. Please try again.', 'error');
         return false;
     }
 }
 
 async function resetPassword(email) {
     try {
+        showMessage('Sending reset instructions...', 'info');
         const formData = new FormData();
         formData.append('action', 'reset-password');
         formData.append('email', email);
@@ -257,15 +285,20 @@ function checkAuth() {
         return null;
     }
     
-    const user = JSON.parse(storedUser);
-    
-    const currentStatus = getUserStatus(user);
-    if (user.status !== currentStatus) {
-        user.status = currentStatus;
-        localStorage.setItem('dmlabsbot_user', JSON.stringify(user));
+    try {
+        const user = JSON.parse(storedUser);
+        
+        const currentStatus = getUserStatus(user);
+        if (user.status !== currentStatus) {
+            user.status = currentStatus;
+            localStorage.setItem('dmlabsbot_user', JSON.stringify(user));
+        }
+        
+        return user;
+    } catch (e) {
+        console.error('Error parsing user data:', e);
+        return null;
     }
-    
-    return user;
 }
 
 function checkPremiumAccess() {
@@ -282,6 +315,7 @@ function checkPremiumAccess() {
 
 async function getToolUrlFromBackend(toolId) {
     try {
+        console.log('Fetching tool URL for:', toolId);
         const formData = new FormData();
         formData.append('action', 'getTool');
         formData.append('toolId', toolId);
@@ -291,12 +325,15 @@ async function getToolUrlFromBackend(toolId) {
             body: formData
         });
         
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         const data = await response.json();
+        console.log('Tool URL response:', data);
         
         if (data.success && data.tool && data.tool.url) {
-            return data.tool.url; // URL only fetched when needed
+            return data.tool.url;
         } else {
             throw new Error(data.message || 'Tool URL not found');
         }
@@ -371,14 +408,22 @@ function createToolIframeContainer() {
 }
 
 async function openTool(toolId) {
+    console.log('Opening tool:', toolId);
+    
     // Find tool metadata (without URL)
     const toolMetadata = tools.find(t => t.id === toolId);
     if (!toolMetadata) {
-        showMessage('Tool not found', 'error');
+        showMessage('Tool not found in local data', 'error');
         return;
     }
     
     const user = checkAuth();
+    if (!user) {
+        showMessage('Please login to access tools', 'error');
+        window.location.href = 'login.html';
+        return;
+    }
+    
     const currentStatus = getUserStatus(user);
     
     // Check access permissions
@@ -413,6 +458,7 @@ async function openTool(toolId) {
     try {
         // SECURE: Fetch URL from backend only when tool is opened
         const toolUrl = await getToolUrlFromBackend(toolId);
+        console.log('Got tool URL:', toolUrl);
         
         // Store current tool data
         currentTool = {
@@ -438,18 +484,19 @@ async function openTool(toolId) {
         };
         
         iframe.onerror = function() {
+            console.error('Iframe loading error');
             document.getElementById('tool-loading').style.display = 'none';
             document.getElementById('tool-error').style.display = 'flex';
             document.getElementById('error-message').textContent = 
-                `Failed to load ${toolMetadata.name}. Please check your internet connection and try again.`;
+                `Failed to load ${toolMetadata.name}. The tool might be temporarily unavailable.`;
         };
         
     } catch (error) {
+        console.error('Error opening tool:', error);
         document.getElementById('tool-loading').style.display = 'none';
         document.getElementById('tool-error').style.display = 'flex';
         document.getElementById('error-message').textContent = 
-            `Error: Unable to load tool. Please try again later.`;
-        console.error('Error opening tool:', error);
+            `Error: Unable to load tool. ${error.message}`;
     }
 }
 
@@ -843,6 +890,7 @@ function closeForgotPasswordModal() {
 // =====================================================================
 
 async function initLoginPage() {
+    console.log('Initializing login page');
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -879,6 +927,7 @@ async function initLoginPage() {
 }
 
 async function initSignupPage() {
+    console.log('Initializing signup page');
     const signupForm = document.getElementById('signup-form');
     if (signupForm) {
         signupForm.addEventListener('submit', async (e) => {
@@ -895,6 +944,7 @@ async function initSignupPage() {
 }
 
 async function initDashboard() {
+    console.log('Initializing dashboard');
     const user = checkAuth();
     if (!user) {
         window.location.href = 'login.html';
@@ -927,17 +977,19 @@ document.addEventListener('keydown', function(e) {
 // =====================================================================
 
 document.addEventListener('DOMContentLoaded', async function() {
+    console.log('DOM loaded, setting up password toggles');
     setupPasswordToggles();
     
     const path = window.location.pathname;
+    console.log('Current path:', path);
     
-    if (path.includes('login.html')) {
+    if (path.includes('login.html') || path.endsWith('login.html')) {
         await initLoginPage();
-    } else if (path.includes('signup.html')) {
+    } else if (path.includes('signup.html') || path.endsWith('signup.html')) {
         await initSignupPage();
-    } else if (path.includes('dashboard.html')) {
+    } else if (path.includes('dashboard.html') || path.endsWith('dashboard.html')) {
         await initDashboard();
-    } else if (path.includes('index.html')) {
+    } else if (path.includes('index.html') || path.endsWith('/') || path.endsWith('index.html')) {
         const user = checkAuth();
         if (user) {
             window.location.href = 'dashboard.html';
