@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - DMLabsbot</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=Open+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Dashboard Page -->
+    <div class="view dashboard active-view">
+        <header class="header">
+            <div class="user-status-bar">
+                <span id="user-name-display" class="user-info-name">Loading...</span>
+                <span id="user-status-display" class="user-info-status free">Free</span>
+                <button id="logout-btn">Log Out</button>
+            </div>
+            <div id="user-expiration-container"></div>
+            <h1>Digital Product Creation Framework</h1>
+            <p>Step-by-step system to transform ideas into profitable digital products</p>
+        </header>
+        
+        <!-- Progress Tracker -->
+        <div class="progress-container" id="progress-container">
+            <!-- Progress will be dynamically loaded -->
+        </div>
+        
+        <!-- Tools Grid with Stage Sections -->
+        <div id="tools-grid-container">
+            <!-- Stage sections and tools will be dynamically generated here -->
+        </div>
+        
+        <!-- Premium CTA -->
+        <div class="premium-cta" id="premium-cta">
+            <h2>🚀 Complete Your Product Journey!</h2>
+            <p>Unlock all 6 stages and 18+ tools to build, launch, and scale your digital product. Subscribe now for just N2,500/month.</p>
+            <a href="https://paydev-web.github.io/dmframework/" target="_blank" class="premium-button">Upgrade to Premium (N2,500/mo)</a>
+        </div>
+    </div>
+
+    <!-- Framework Introduction Modal -->
+    <div id="framework-modal" class="framework-modal">
+        <div class="modal-content">
+            <button class="modal-close" onclick="closeFrameworkModal()">×</button>
+            <h2 class="modal-title">🎉 Welcome to Your Digital Product Creation Journey!</h2>
+            <p class="modal-subtitle">Here's how our step-by-step framework works:</p>
+            
+            <div class="modal-steps">
+                <div class="modal-step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h4>Follow the Stages</h4>
+                        <p>Work through 6 stages from idea discovery to scaling. Each stage has specific tools to help you complete that phase.</p>
+                    </div>
+                </div>
+                <div class="modal-step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h4>Track Your Progress</h4>
+                        <p>Your progress is automatically saved. Return anytime and continue from where you left off.</p>
+                    </div>
+                </div>
+                <div class="modal-step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h4>Get Recommendations</h4>
+                        <p>The system suggests the next tool to use, keeping you on track and reducing overwhelm.</p>
+                    </div>
+                </div>
+                <div class="modal-step">
+                    <div class="step-number">4</div>
+                    <div class="step-content">
+                        <h4>Unlock as You Grow</h4>
+                        <p>Stage 1 is free. Upgrade to Premium anytime to unlock all 6 stages and complete your product.</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="text-align: center; margin-top: 30px;">
+                <button class="primary-button" onclick="closeFrameworkModal()">Start Your Journey!</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Global Message Box -->
+    <div id="message-box" class="message-box hidden"></div>
+    
+    <script src="main.js"></script>
+</body>
+</html>
