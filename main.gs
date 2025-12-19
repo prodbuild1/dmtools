@@ -5,58 +5,13 @@
 const GAS_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbziXMS_YZq8_YDMxrkBNbLWzA3CBEzQoQwlGXY2o2QixAsBSSb4HhuSN6okQZiuA31xmg/exec';
 
 // =====================================================================
-// DIGITAL PRODUCT EXECUTION FRAMEWORK
-// =====================================================================
-
-const FRAMEWORK_STAGES = {
-    1: { id: 'discover', title: 'Stage 1: Discover', goal: 'Find what people already want', plan: 'Free' },
-    2: { id: 'understand', title: 'Stage 2: Understand', goal: 'Know your customer deeply', plan: 'Premium' },
-    3: { id: 'design', title: 'Stage 3: Design', goal: 'Define product promise & structure', plan: 'Premium' },
-    4: { id: 'build', title: 'Stage 4: Build', goal: 'Create the digital product', plan: 'Premium' },
-    5: { id: 'sell', title: 'Stage 5: Sell', goal: 'Convert visitors into buyers', plan: 'Premium' },
-    6: { id: 'scale', title: 'Stage 6: Scale', goal: 'Drive traffic & growth', plan: 'Premium' }
-};
-
-// =====================================================================
-// TOOLS MANAGEMENT - UPDATED TO FETCH FROM BACKEND
-// =====================================================================
-
-let tools = []; // Will be populated from backend
-
-async function fetchToolsFromBackend() {
-    try {
-        const formData = new FormData();
-        formData.append('action', 'getTools');
-        
-        const response = await fetch(GAS_WEB_APP_URL, {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (data.success && data.tools) {
-            tools = data.tools;
-            return true;
-        } else {
-            console.error('Failed to fetch tools:', data.message);
-            // Fallback to empty array
-            tools = [];
-            return false;
-        }
-    } catch (error) {
-        console.error('Error fetching tools:', error);
-        tools = [];
-        return false;
-    }
-}
-
-// =====================================================================
 // GLOBAL STATE
 // =====================================================================
 
 let currentTool = null;
 let isToolOpen = false;
+let tools = []; // Will be loaded from backend
+let FRAMEWORK_STAGES = {}; // Will be loaded from backend
 
 // =====================================================================
 // UTILITY FUNCTIONS
@@ -91,24 +46,67 @@ function setupPasswordToggles() {
 }
 
 // =====================================================================
-// AUTHENTICATION FUNCTIONS - UPDATED FOR PREMIUM CHECK
+// FETCH TOOLS FROM BACKEND - SECURED VERSION
+// =====================================================================
+
+async function loadToolsFromBackend() {
+    try {
+        const formData = new FormData();
+        formData.append('action', 'getTools');
+        
+        const response = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            tools = data.tools || [];
+            FRAMEWORK_STAGES = data.frameworkStages || {};
+            
+            // IMPORTANT: Remove URLs from frontend tools to prevent exposure
+            tools = tools.map(tool => ({
+                id: tool.id,
+                name: tool.name,
+                description: tool.description,
+                icon: tool.icon,
+                plan: tool.plan,
+                stage: tool.stage,
+                type: tool.type
+                // URL is NOT stored in frontend
+            }));
+            
+            console.log('Tools metadata loaded from backend (URLs secured)');
+            return true;
+        } else {
+            console.error('Failed to load tools from backend:', data.message);
+            return false;
+        }
+    } catch (error) {
+        console.error('Error loading tools from backend:', error);
+        return false;
+    }
+}
+
+// =====================================================================
+// AUTHENTICATION FUNCTIONS
 // =====================================================================
 
 function getUserStatus(user) {
     if (!user) return 'Free';
     
-    // Check if user has expired premium
     if (user.expiryDate) {
         const today = new Date();
         const expiryDate = new Date(user.expiryDate);
         
-        // If expiry date is in the past
         if (expiryDate < today) {
             return 'Expired';
         }
     }
     
-    // Check plan status
     if (user.plan === 'Premium' && user.status !== 'Expired') {
         return 'Premium';
     }
@@ -131,7 +129,6 @@ async function login(email, password) {
         const data = await response.json();
         
         if (data.success) {
-            // Calculate user status based on expiry date
             const today = new Date();
             const expiryDate = data.expiryDate ? new Date(data.expiryDate) : null;
             
@@ -154,7 +151,6 @@ async function login(email, password) {
             
             showMessage(`Welcome back, ${data.name}!`, 'success');
             
-            // Redirect to dashboard
             setTimeout(() => {
                 window.location.href = 'dashboard.html';
             }, 1000);
@@ -202,10 +198,8 @@ async function signup(name, email, password, phone = '') {
             
             showMessage(`Account created! Welcome to DMLabsbot, ${name}!`, 'success');
             
-            // Reset progress for new user
             localStorage.removeItem('dmlabsbot_progress');
             
-            // Redirect to dashboard
             setTimeout(() => {
                 window.location.href = 'dashboard.html';
             }, 1500);
@@ -265,7 +259,6 @@ function checkAuth() {
     
     const user = JSON.parse(storedUser);
     
-    // Update status based on expiry date
     const currentStatus = getUserStatus(user);
     if (user.status !== currentStatus) {
         user.status = currentStatus;
@@ -284,28 +277,50 @@ function checkPremiumAccess() {
 }
 
 // =====================================================================
-// TOOL IFRAME MANAGEMENT
+// TOOL MANAGEMENT - URLS SECURED IN BACKEND
 // =====================================================================
 
+async function getToolUrlFromBackend(toolId) {
+    try {
+        const formData = new FormData();
+        formData.append('action', 'getTool');
+        formData.append('toolId', toolId);
+        
+        const response = await fetch(GAS_WEB_APP_URL, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
+        
+        if (data.success && data.tool && data.tool.url) {
+            return data.tool.url; // URL only fetched when needed
+        } else {
+            throw new Error(data.message || 'Tool URL not found');
+        }
+    } catch (error) {
+        console.error('Error fetching tool URL:', error);
+        throw error;
+    }
+}
+
 function createToolIframeContainer() {
-    // Create iframe container if it doesn't exist
     let iframeContainer = document.getElementById('tool-iframe-container');
     if (!iframeContainer) {
         iframeContainer = document.createElement('div');
         iframeContainer.id = 'tool-iframe-container';
         iframeContainer.className = 'tool-iframe-container';
         
-        // Create backdrop
         const backdrop = document.createElement('div');
         backdrop.id = 'tool-backdrop';
         backdrop.className = 'tool-backdrop';
         backdrop.onclick = closeTool;
         
-        // Create iframe wrapper
         const iframeWrapper = document.createElement('div');
         iframeWrapper.className = 'tool-iframe-wrapper';
         
-        // Create header
         const header = document.createElement('div');
         header.className = 'tool-header';
         header.innerHTML = `
@@ -316,14 +331,12 @@ function createToolIframeContainer() {
             <button class="tool-close-button" onclick="closeTool()">Close</button>
         `;
         
-        // Create iframe
         const iframe = document.createElement('iframe');
         iframe.id = 'tool-iframe';
         iframe.className = 'tool-iframe';
         iframe.frameBorder = '0';
         iframe.allow = 'fullscreen';
         
-        // Create loading state
         const loadingState = document.createElement('div');
         loadingState.id = 'tool-loading';
         loadingState.className = 'tool-loading';
@@ -332,7 +345,6 @@ function createToolIframeContainer() {
             <div class="loading-text" id="loading-text">Loading tool...</div>
         `;
         
-        // Create error state
         const errorState = document.createElement('div');
         errorState.id = 'tool-error';
         errorState.className = 'tool-error';
@@ -345,7 +357,6 @@ function createToolIframeContainer() {
             <button class="retry-button" onclick="closeTool()" style="margin-top: 10px; background: var(--gray);">Close</button>
         `;
         
-        // Assemble everything
         iframeWrapper.appendChild(header);
         iframeWrapper.appendChild(loadingState);
         iframeWrapper.appendChild(errorState);
@@ -360,18 +371,9 @@ function createToolIframeContainer() {
 }
 
 async function openTool(toolId) {
-    // Ensure tools are loaded
-    if (tools.length === 0) {
-        showMessage('Loading tools...', 'info');
-        const loaded = await fetchToolsFromBackend();
-        if (!loaded) {
-            showMessage('Failed to load tools. Please try again.', 'error');
-            return;
-        }
-    }
-    
-    const tool = tools.find(t => t.id === toolId);
-    if (!tool) {
+    // Find tool metadata (without URL)
+    const toolMetadata = tools.find(t => t.id === toolId);
+    if (!toolMetadata) {
         showMessage('Tool not found', 'error');
         return;
     }
@@ -379,8 +381,8 @@ async function openTool(toolId) {
     const user = checkAuth();
     const currentStatus = getUserStatus(user);
     
-    // Check access permissions with proper premium validation
-    if (tool.plan === 'Premium') {
+    // Check access permissions
+    if (toolMetadata.plan === 'Premium') {
         if (currentStatus !== 'Premium') {
             if (currentStatus === 'Expired') {
                 showMessage('Your Premium plan has expired. Please renew to access premium tools.', 'error');
@@ -391,61 +393,64 @@ async function openTool(toolId) {
         }
     }
     
-    currentTool = tool;
-    isToolOpen = true;
-    
-    // Create or get iframe container
+    // Show loading state immediately
     const iframeContainer = createToolIframeContainer();
     const backdrop = document.getElementById('tool-backdrop');
     
-    // Update header with tool info
-    document.getElementById('tool-header-icon').textContent = tool.icon;
-    document.getElementById('tool-header-title').textContent = tool.name;
-    document.getElementById('loading-text').textContent = `Loading ${tool.name}...`;
+    document.getElementById('tool-header-icon').textContent = toolMetadata.icon;
+    document.getElementById('tool-header-title').textContent = toolMetadata.name;
+    document.getElementById('loading-text').textContent = `Loading ${toolMetadata.name}...`;
     
-    // Show loading state
     document.getElementById('tool-loading').style.display = 'flex';
     document.getElementById('tool-error').style.display = 'none';
     document.getElementById('tool-iframe').style.display = 'none';
     
-    // Show container and backdrop
     iframeContainer.classList.add('active');
     backdrop.classList.add('active');
     
-    // Update progress
-    PROGRESS_TRACKER.markToolCompleted(toolId);
-    
-    // Load iframe
-    loadToolIframe(tool);
-    
-    // Prevent body scroll
     document.body.style.overflow = 'hidden';
-}
-
-function loadToolIframe(tool) {
-    const iframe = document.getElementById('tool-iframe');
-    const loadingState = document.getElementById('tool-loading');
-    const errorState = document.getElementById('tool-error');
     
-    // Set iframe source
-    iframe.src = tool.url;
-    
-    // Handle iframe load
-    iframe.onload = function() {
-        setTimeout(() => {
-            loadingState.style.display = 'none';
-            iframe.style.display = 'block';
-            showMessage(`${tool.name} loaded successfully`, 'success');
-        }, 500);
-    };
-    
-    // Handle iframe errors
-    iframe.onerror = function() {
-        loadingState.style.display = 'none';
-        errorState.style.display = 'flex';
+    try {
+        // SECURE: Fetch URL from backend only when tool is opened
+        const toolUrl = await getToolUrlFromBackend(toolId);
+        
+        // Store current tool data
+        currentTool = {
+            ...toolMetadata,
+            url: toolUrl
+        };
+        
+        isToolOpen = true;
+        
+        // Update progress
+        PROGRESS_TRACKER.markToolCompleted(toolId);
+        
+        // Load iframe with secured URL
+        const iframe = document.getElementById('tool-iframe');
+        iframe.src = toolUrl;
+        
+        iframe.onload = function() {
+            setTimeout(() => {
+                document.getElementById('tool-loading').style.display = 'none';
+                iframe.style.display = 'block';
+                showMessage(`${toolMetadata.name} loaded successfully`, 'success');
+            }, 500);
+        };
+        
+        iframe.onerror = function() {
+            document.getElementById('tool-loading').style.display = 'none';
+            document.getElementById('tool-error').style.display = 'flex';
+            document.getElementById('error-message').textContent = 
+                `Failed to load ${toolMetadata.name}. Please check your internet connection and try again.`;
+        };
+        
+    } catch (error) {
+        document.getElementById('tool-loading').style.display = 'none';
+        document.getElementById('tool-error').style.display = 'flex';
         document.getElementById('error-message').textContent = 
-            `Failed to load ${tool.name}. Please check your internet connection and try again.`;
-    };
+            `Error: Unable to load tool. Please try again later.`;
+        console.error('Error opening tool:', error);
+    }
 }
 
 function closeTool() {
@@ -457,13 +462,11 @@ function closeTool() {
         iframeContainer.classList.remove('active');
         backdrop.classList.remove('active');
         
-        // Reset iframe
         if (iframe) {
             iframe.src = '';
             iframe.style.display = 'none';
         }
         
-        // Reset states
         document.getElementById('tool-loading').style.display = 'flex';
         document.getElementById('tool-error').style.display = 'none';
     }
@@ -471,10 +474,8 @@ function closeTool() {
     isToolOpen = false;
     currentTool = null;
     
-    // Restore body scroll
     document.body.style.overflow = '';
     
-    // Refresh dashboard to show updated progress
     if (window.location.pathname.includes('dashboard.html')) {
         renderProgressTracker();
         renderStageSections();
@@ -485,7 +486,9 @@ function retryTool() {
     if (currentTool) {
         document.getElementById('tool-error').style.display = 'none';
         document.getElementById('tool-loading').style.display = 'flex';
-        loadToolIframe(currentTool);
+        
+        const iframe = document.getElementById('tool-iframe');
+        iframe.src = currentTool.url;
     }
 }
 
@@ -515,13 +518,10 @@ const PROGRESS_TRACKER = {
         if (!progress.completedTools.includes(toolId)) {
             progress.completedTools.push(toolId);
             
-            // Update current stage based on completed tools
             const tool = tools.find(t => t.id === toolId);
             if (tool) {
-                // Store last opened tool
                 progress.lastToolOpened = toolId;
                 
-                // Move to next stage if all tools in current stage are completed
                 const stageTools = tools.filter(t => t.stage === tool.stage);
                 const completedStageTools = stageTools.filter(t => 
                     progress.completedTools.includes(t.id)
@@ -540,18 +540,15 @@ const PROGRESS_TRACKER = {
         const progress = this.getProgress();
         const currentStage = progress.currentStage;
         
-        // Get tools in current stage that aren't completed
         const stageTools = tools.filter(t => t.stage === currentStage);
         const incompleteTools = stageTools.filter(t => 
             !progress.completedTools.includes(t.id)
         );
         
-        // Return first incomplete tool in current stage
         if (incompleteTools.length > 0) {
             return incompleteTools[0];
         }
         
-        // If all tools in current stage are completed, move to next stage
         if (currentStage < 6) {
             const nextStageTools = tools.filter(t => t.stage === currentStage + 1);
             if (nextStageTools.length > 0) {
@@ -578,7 +575,7 @@ const PROGRESS_TRACKER = {
 };
 
 // =====================================================================
-// DASHBOARD FUNCTIONS - UPDATED FOR PREMIUM ACCESS CHECK
+// DASHBOARD FUNCTIONS
 // =====================================================================
 
 function renderProgressTracker() {
@@ -599,6 +596,8 @@ function renderProgressTracker() {
     
     for (let stageNum = 1; stageNum <= 6; stageNum++) {
         const stage = FRAMEWORK_STAGES[stageNum];
+        if (!stage) continue;
+        
         const stageProgress = PROGRESS_TRACKER.getStageProgress(stageNum);
         
         let circleClass = '';
@@ -622,7 +621,6 @@ function renderProgressTracker() {
     
     html += `</div>`;
     
-    // Add next tool recommendation
     const nextTool = PROGRESS_TRACKER.getNextRecommendedTool();
     if (nextTool) {
         const user = checkAuth();
@@ -643,23 +641,21 @@ function renderProgressTracker() {
     progressContainer.innerHTML = html;
 }
 
-async function renderStageSections() {
+function getStageDescription(stageNum) {
+    const descriptions = {
+        1: 'Find proven ideas by analyzing market demand and trending questions',
+        2: 'Understand your ideal customer and analyze competitors',
+        3: 'Design your product structure and value proposition',
+        4: 'Build your product content and add valuable bonuses',
+        5: 'Create sales assets and build your email list',
+        6: 'Scale your product with advertising and social media content'
+    };
+    return descriptions[stageNum] || '';
+}
+
+function renderStageSections() {
     const toolsContainer = document.getElementById('tools-grid-container');
     if (!toolsContainer) return;
-    
-    // Ensure tools are loaded
-    if (tools.length === 0) {
-        const loaded = await fetchToolsFromBackend();
-        if (!loaded) {
-            toolsContainer.innerHTML = `
-                <div class="loading-state">
-                    <div class="loading-spinner"></div>
-                    <p>Failed to load tools. Please refresh the page.</p>
-                </div>
-            `;
-            return;
-        }
-    }
     
     const user = checkAuth();
     const currentStatus = getUserStatus(user);
@@ -670,10 +666,11 @@ async function renderStageSections() {
     
     for (let stageNum = 1; stageNum <= 6; stageNum++) {
         const stage = FRAMEWORK_STAGES[stageNum];
+        if (!stage) continue;
+        
         const stageTools = tools.filter(t => t.stage === stageNum);
         const stageProgress = PROGRESS_TRACKER.getStageProgress(stageNum);
         
-        // Skip stages that are locked for free users
         if (!isPremium && stageNum > 1 && progress.currentStage < stageNum) {
             continue;
         }
@@ -687,12 +684,7 @@ async function renderStageSections() {
                     </h3>
                     <p class="stage-goal">🎯 ${stage.goal}</p>
                     <p class="stage-description">
-                        ${stageNum === 1 ? 'Find proven ideas by analyzing market demand and trending questions' :
-                          stageNum === 2 ? 'Understand your ideal customer and analyze competitors' :
-                          stageNum === 3 ? 'Design your product structure and value proposition' :
-                          stageNum === 4 ? 'Build your product content and add valuable bonuses' :
-                          stageNum === 5 ? 'Create sales assets and build your email list' :
-                          'Scale your product with advertising and social media content'}
+                        ${getStageDescription(stageNum)}
                     </p>
                     <div class="completion-indicator ${stageProgress.completed === stageProgress.total ? 'completed' : ''}">
                         ${stageProgress.completed}/${stageProgress.total} tools completed
@@ -726,7 +718,6 @@ async function renderStageSections() {
             `;
         });
         
-        // Add upsell for premium stages for free users
         if (!isPremium && stageNum > 1 && stageNum <= progress.currentStage) {
             stageHtml += `
                 <div class="stage-upsell">
@@ -743,26 +734,25 @@ async function renderStageSections() {
         toolsContainer.innerHTML += stageHtml;
     }
     
-    // Setup tool button event listeners
     setupToolButtonListeners();
 }
 
 function setupToolButtonListeners() {
     document.querySelectorAll('.tool-button:not(.locked)').forEach(button => {
-        button.addEventListener('click', async function(e) {
+        button.addEventListener('click', function(e) {
             e.stopPropagation();
             const toolId = this.getAttribute('data-tool-id');
-            await openTool(toolId);
+            openTool(toolId);
         });
     });
     
     document.querySelectorAll('.tool-card:not(.locked)').forEach(card => {
-        card.addEventListener('click', async function(e) {
+        card.addEventListener('click', function(e) {
             if (!e.target.closest('.tool-button')) {
                 const button = this.querySelector('.tool-button');
                 if (button && !button.classList.contains('locked')) {
                     const toolId = button.getAttribute('data-tool-id');
-                    await openTool(toolId);
+                    openTool(toolId);
                 }
             }
         });
@@ -780,7 +770,6 @@ function updateUserStatusDisplay() {
     if (nameEl && statusEl) {
         nameEl.textContent = user.name || 'User';
         
-        // Get current status
         const currentStatus = getUserStatus(user);
         statusEl.textContent = currentStatus;
         statusEl.className = `user-info-status ${currentStatus.toLowerCase()}`;
@@ -790,7 +779,6 @@ function updateUserStatusDisplay() {
         }
     }
     
-    // Add expiry warning if applicable
     const expiryContainer = document.getElementById('user-expiration-container');
     if (expiryContainer) {
         const currentStatus = getUserStatus(user);
@@ -831,7 +819,6 @@ function showFrameworkIntroduction() {
     if (progress.firstTime) {
         modal.classList.add('active');
         
-        // Update firstTime flag
         progress.firstTime = false;
         PROGRESS_TRACKER.saveProgress(progress);
     }
@@ -855,7 +842,7 @@ function closeForgotPasswordModal() {
 // PAGE INITIALIZATION
 // =====================================================================
 
-function initLoginPage() {
+async function initLoginPage() {
     const loginForm = document.getElementById('login-form');
     if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -867,7 +854,6 @@ function initLoginPage() {
             await login(email, password);
         });
         
-        // Forgot password link
         const forgotLink = document.getElementById('forgot-password-link');
         if (forgotLink) {
             forgotLink.addEventListener('click', function(e) {
@@ -879,7 +865,6 @@ function initLoginPage() {
             });
         }
         
-        // Reset password form
         const resetForm = document.getElementById('reset-password-form');
         if (resetForm) {
             resetForm.addEventListener('submit', async (e) => {
@@ -893,7 +878,7 @@ function initLoginPage() {
     }
 }
 
-function initSignupPage() {
+async function initSignupPage() {
     const signupForm = document.getElementById('signup-form');
     if (signupForm) {
         signupForm.addEventListener('submit', async (e) => {
@@ -910,19 +895,23 @@ function initSignupPage() {
 }
 
 async function initDashboard() {
-    // Check authentication
     const user = checkAuth();
     if (!user) {
         window.location.href = 'login.html';
         return;
     }
     
-    // Update UI
+    // Load tools metadata (without URLs) from backend
+    const toolsLoaded = await loadToolsFromBackend();
+    if (!toolsLoaded) {
+        showMessage('Unable to load tools. Please refresh the page.', 'error');
+        return;
+    }
+    
     updateUserStatusDisplay();
     renderProgressTracker();
-    await renderStageSections();
+    renderStageSections();
     
-    // Show framework introduction for first-time users
     setTimeout(showFrameworkIntroduction, 1000);
 }
 
@@ -937,21 +926,18 @@ document.addEventListener('keydown', function(e) {
 // MAIN INITIALIZATION
 // =====================================================================
 
-document.addEventListener('DOMContentLoaded', function() {
-    // Setup password toggles on all pages
+document.addEventListener('DOMContentLoaded', async function() {
     setupPasswordToggles();
     
-    // Initialize based on current page
     const path = window.location.pathname;
     
     if (path.includes('login.html')) {
-        initLoginPage();
+        await initLoginPage();
     } else if (path.includes('signup.html')) {
-        initSignupPage();
+        await initSignupPage();
     } else if (path.includes('dashboard.html')) {
-        initDashboard();
+        await initDashboard();
     } else if (path.includes('index.html')) {
-        // Check if user is already logged in
         const user = checkAuth();
         if (user) {
             window.location.href = 'dashboard.html';
@@ -966,4 +952,3 @@ window.closeFrameworkModal = closeFrameworkModal;
 window.closeForgotPasswordModal = closeForgotPasswordModal;
 window.logout = logout;
 window.retryTool = retryTool;
-
